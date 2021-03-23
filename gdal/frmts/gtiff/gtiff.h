@@ -33,6 +33,7 @@
 
 #include "cpl_port.h"
 #include "cpl_string.h"
+#include "cpl_minixml.h"
 #include <cstdint>
 
 #include "gdal.h"
@@ -75,6 +76,11 @@ CPLString CPL_DLL GTiffGetCompressValues(bool& bHasLZW,
                                  bool& bHasWebP,
                                  bool& bHasLERC,
                                  bool bForCOG);
+
+void GTiffAppendMetadataItem( CPLXMLNode **ppsRoot, CPLXMLNode **ppsTail,
+                                const char *pszKey, const char *pszValue,
+                                int nBand = 0, const char *pszRole = nullptr,
+                                const char *pszDomain = nullptr );
 
 #if !defined(TIFFTAG_GDAL_METADATA)
 // The following 5 tags are now defined in tiff.h of libtiff > 4.1.0

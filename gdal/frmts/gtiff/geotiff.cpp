@@ -89,6 +89,7 @@
 #include "gdal_thread_pool.h"
 #include "geo_normalize.h"
 #include "geotiff.h"
+#include "geotiff_multidim.h"
 #include "geovalues.h"
 #include "gt_jpeg_copy.h"
 #include "gt_overview.h"
@@ -11242,10 +11243,10 @@ void GTiffDataset::WriteGeoTIFFInfo()
 }
 
 /************************************************************************/
-/*                         AppendMetadataItem()                         */
+/*                      GTiffAppendMetadataItem()                       */
 /************************************************************************/
 
-static void AppendMetadataItem( CPLXMLNode **ppsRoot, CPLXMLNode **ppsTail,
+void GTiffAppendMetadataItem( CPLXMLNode **ppsRoot, CPLXMLNode **ppsTail,
                                 const char *pszKey, const char *pszValue,
                                 int nBand, const char *pszRole,
                                 const char *pszDomain )
@@ -11430,7 +11431,7 @@ static void WriteMDMetadata( GDALMultiDomainMetadata *poMDMD, TIFF *hTIFF,
             }
             else
             {
-                AppendMetadataItem( ppsRoot, ppsTail,
+                GTiffAppendMetadataItem( ppsRoot, ppsTail,
                                     pszItemName, pszItemValue,
                                     nBand, nullptr, papszDomainList[iDomain] );
             }
@@ -11713,10 +11714,10 @@ bool GTiffDataset::WriteMetadata( GDALDataset *poSrcDS, TIFF *l_hTIFF,
             char szValue[128] = {};
 
             CPLsnprintf( szValue, sizeof(szValue), "%.18g", dfOffset );
-            AppendMetadataItem( &psRoot, &psTail, "OFFSET", szValue, nBand,
+            GTiffAppendMetadataItem( &psRoot, &psTail, "OFFSET", szValue, nBand,
                                 "offset", "" );
             CPLsnprintf( szValue, sizeof(szValue), "%.18g", dfScale );
-            AppendMetadataItem( &psRoot, &psTail, "SCALE", szValue, nBand,
+            GTiffAppendMetadataItem( &psRoot, &psTail, "SCALE", szValue, nBand,
                                 "scale", "" );
         }
 
@@ -11736,7 +11737,7 @@ bool GTiffDataset::WriteMetadata( GDALDataset *poSrcDS, TIFF *l_hTIFF,
             }
             if( bWriteUnit )
             {
-                AppendMetadataItem( &psRoot, &psTail, "UNITTYPE",
+                GTiffAppendMetadataItem( &psRoot, &psTail, "UNITTYPE",
                                     pszUnitType, nBand,
                                     "unittype", "" );
             }
@@ -11744,7 +11745,7 @@ bool GTiffDataset::WriteMetadata( GDALDataset *poSrcDS, TIFF *l_hTIFF,
 
         if( strlen(poBand->GetDescription()) > 0 )
         {
-            AppendMetadataItem( &psRoot, &psTail, "DESCRIPTION",
+            GTiffAppendMetadataItem( &psRoot, &psTail, "DESCRIPTION",
                                 poBand->GetDescription(), nBand,
                                 "description", "" );
         }
@@ -11753,7 +11754,7 @@ bool GTiffDataset::WriteMetadata( GDALDataset *poSrcDS, TIFF *l_hTIFF,
             !(nBand <= 3 &&  EQUAL(CSLFetchNameValueDef(
                 l_papszCreationOptions, "PHOTOMETRIC", ""), "RGB") ) )
         {
-            AppendMetadataItem( &psRoot, &psTail, "COLORINTERP",
+            GTiffAppendMetadataItem( &psRoot, &psTail, "COLORINTERP",
                                 GDALGetColorInterpretationName(
                                     poBand->GetColorInterpretation()),
                                 nBand,
@@ -11765,7 +11766,7 @@ bool GTiffDataset::WriteMetadata( GDALDataset *poSrcDS, TIFF *l_hTIFF,
         CSLFetchNameValue(l_papszCreationOptions, "@TILING_SCHEME_NAME");
     if( pszTilingSchemeName )
     {
-        AppendMetadataItem( &psRoot, &psTail,
+        GTiffAppendMetadataItem( &psRoot, &psTail,
                             "NAME", pszTilingSchemeName,
                             0, nullptr, "TILING_SCHEME" );
 
@@ -11773,7 +11774,7 @@ bool GTiffDataset::WriteMetadata( GDALDataset *poSrcDS, TIFF *l_hTIFF,
             l_papszCreationOptions, "@TILING_SCHEME_ZOOM_LEVEL");
         if( pszZoomLevel )
         {
-            AppendMetadataItem( &psRoot, &psTail,
+            GTiffAppendMetadataItem( &psRoot, &psTail,
                                 "ZOOM_LEVEL", pszZoomLevel,
                                 0, nullptr, "TILING_SCHEME" );
         }
@@ -11782,7 +11783,7 @@ bool GTiffDataset::WriteMetadata( GDALDataset *poSrcDS, TIFF *l_hTIFF,
             l_papszCreationOptions, "@TILING_SCHEME_ALIGNED_LEVELS");
         if( pszAlignedLevels )
         {
-            AppendMetadataItem( &psRoot, &psTail,
+            GTiffAppendMetadataItem( &psRoot, &psTail,
                                 "ALIGNED_LEVELS", pszAlignedLevels,
                                 0, nullptr, "TILING_SCHEME" );
         }
@@ -17188,6 +17189,16 @@ GTiffDataset::CreateCopy( const char * pszFilename, GDALDataset *poSrcDS,
                           GDALProgressFunc pfnProgress, void * pProgressData )
 
 {
+    if( poSrcDS->GetRootGroup() )
+    {
+        auto poDrv = GDALDriver::FromHandle(GDALGetDriverByName("GTiff"));
+        if( poDrv )
+        {
+            return poDrv->DefaultCreateCopy(pszFilename, poSrcDS, bStrict,
+                                     papszOptions, pfnProgress, pProgressData);
+        }
+    }
+
     if( poSrcDS->GetRasterCount() == 0 )
     {
         ReportError( pszFilename, CE_Failure, CPLE_AppDefined,
@@ -20254,6 +20265,7 @@ void GDALRegister_GTiff()
 /* -------------------------------------------------------------------- */
     poDriver->SetDescription( "GTiff" );
     poDriver->SetMetadataItem( GDAL_DCAP_RASTER, "YES" );
+    poDriver->SetMetadataItem( GDAL_DCAP_MULTIDIM_RASTER, "YES" );
     poDriver->SetMetadataItem( GDAL_DMD_LONGNAME, "GeoTIFF" );
     poDriver->SetMetadataItem( GDAL_DMD_HELPTOPIC, "drivers/raster/gtiff.html" );
     poDriver->SetMetadataItem( GDAL_DMD_MIMETYPE, "image/tiff" );
@@ -20289,6 +20301,7 @@ void GDALRegister_GTiff()
     poDriver->pfnOpen = GTiffDataset::Open;
     poDriver->pfnCreate = GTiffDataset::Create;
     poDriver->pfnCreateCopy = GTiffDataset::CreateCopy;
+    poDriver->pfnCreateMultiDimensional = osgeo::gdal::gtiff::MultiDimDataset::CreateMultiDim;
     poDriver->pfnUnloadDriver = GDALDeregister_GTiff;
     poDriver->pfnIdentify = GTiffDataset::Identify;
 
